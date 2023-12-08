@@ -13,10 +13,6 @@ The fusion process combines the strengths of GCN, which excels at capturing grap
 The fused model is applied to perform sentiment analysis specifically tailored for financial datasets. Analyzing sentiments in financial data is crucial for understanding market trends, investor sentiment, and making informed decisions in the financial domain.
 
 ## Requirement
-- requirement.txt has all requirements, run the following code
-    ```bash
-    pip install -r requirement.txt
-    ```
 - GloVe pre-trained word vectors:
   - Download pre-trained word vectors [here](https://github.com/stanfordnlp/GloVe#download-pre-trained-word-vectors).
   - Put [glove.840B.300d.txt](http://nlp.stanford.edu/data/wordvecs/glove.840B.300d.zip) into the `dataset/glove/` folder.  
