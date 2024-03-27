@@ -14,9 +14,9 @@ class GCNClassifier(nn.Module):
         self.classifier = nn.Linear(in_dim, args.num_class)
 
     def forward(self, inputs):
-        outputs = self.gcn_model(inputs)
+        outputs,weights,h = self.gcn_model(inputs)
         logits = self.classifier(outputs)
-        return logits, outputs
+        return weights,outputs,logits,h
 
 class GCNAbsaModel(nn.Module):
     def __init__(self, args, emb_matrix=None):
@@ -35,6 +35,7 @@ class GCNAbsaModel(nn.Module):
 
         # gcn layer
         self.gcn = GCN(args, embeddings, args.hidden_dim, args.num_layers)
+        self.attention = Attention(args.hidden_dim)
 
     def forward(self, inputs):
         tok, asp, pos, head, deprel, post, mask, l = inputs           # unpack inputs
@@ -49,13 +50,13 @@ class GCNAbsaModel(nn.Module):
 
         adj = inputs_to_tree_reps(head.data, tok.data, l.data)
         h = self.gcn(adj, inputs)
-        
         # avg pooling asp feature
         asp_wn = mask.sum(dim=1).unsqueeze(-1)                        # aspect words num
+        
         mask = mask.unsqueeze(-1).repeat(1,1,self.args.hidden_dim)    # mask for h
         outputs = (h*mask).sum(dim=1) / asp_wn                        # mask h
         
-        return outputs
+        return outputs,self.attention(h),h
 
 class GCN(nn.Module):
     def __init__(self, args, embeddings, mem_dim, num_layers):
@@ -89,7 +90,7 @@ class GCN(nn.Module):
     def encode_with_rnn(self, rnn_inputs, seq_lens, batch_size):
         seq_lens = seq_lens.cpu()
         h0, c0 = rnn_zero_state(batch_size, self.args.rnn_hidden, self.args.rnn_layers, self.args.bidirect)
-        rnn_inputs = nn.utils.rnn.pack_padded_sequence(rnn_inputs, seq_lens, batch_first=True)
+        rnn_inputs = nn.utils.rnn.pack_padded_sequence(rnn_inputs, seq_lens, batch_first=True,enforce_sorted=False)
         rnn_outputs, (ht, ct) = self.rnn(rnn_inputs, (h0, c0))
         rnn_outputs, _ = nn.utils.rnn.pad_packed_sequence(rnn_outputs, batch_first=True)
         return rnn_outputs
@@ -126,3 +127,46 @@ def rnn_zero_state(batch_size, hidden_dim, num_layers, bidirectional=True):
     h0 = c0 = Variable(torch.zeros(*state_shape), requires_grad=False)
     return h0.cuda(), c0.cuda()
 
+class Attention(nn.Module):
+    def __init__(self, hidden_dim, use_W=True, use_bias=False, return_self_attend=False, return_attend_weight=True):
+        super().__init__()
+        self.hidden_dim = hidden_dim
+        self.use_W = use_W
+        self.use_bias = use_bias
+        self.return_self_attend = return_self_attend
+        self.return_attend_weight = return_attend_weight
+
+        if self.use_W:
+            self.W = nn.Parameter(torch.zeros(hidden_dim, hidden_dim))
+            nn.init.xavier_uniform_(self.W)
+
+        if self.use_bias:
+            self.b = nn.Parameter(torch.zeros(hidden_dim))
+
+        self.u = nn.Parameter(torch.zeros(hidden_dim))
+        nn.init.uniform_(self.u)
+
+    def forward(self, x, mask=None):
+        if self.use_W:
+            #print(x.shape)
+            x = torch.tanh(torch.matmul(x, self.W))
+
+        ait = torch.matmul(x, self.u.t())  # Transpose u for correct matrix multiplication
+        if self.use_bias:
+            ait = ait+self.b
+
+        a = torch.exp(ait)
+
+        if mask is not None:
+            a = a*mask
+
+        a =a/ torch.sum(a, dim=1, keepdim=True) + 1e-10  # Add epsilon to avoid numerical instability
+
+        if self.return_self_attend:
+            attend_output = torch.sum(x * a.unsqueeze(-1), dim=1)
+            if self.return_attend_weight:
+                return attend_output, a
+            else:
+                return attend_output
+        else:
+            return a

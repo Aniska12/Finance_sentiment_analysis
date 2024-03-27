@@ -34,6 +34,7 @@ class DataLoader(object):
         token_vocab, post_vocab, pos_vocab, dep_vocab, pol_vocab = vocab
         processed = []
 
+        juy=0
         for d in data:
             for aspect in d['aspects']:
                 # word token
@@ -80,7 +81,7 @@ class DataLoader(object):
                 deprel = [dep_vocab.stoi.get(t, dep_vocab.unk_index) for t in deprel]
                 # mapping post
                 post = [post_vocab.stoi.get(t, post_vocab.unk_index) for t in post]
-                #print(len(tok),len(pos),len(head),len(deprel),len(post),len(mask),aspect)
+                #print(len(tok),len(pos),len(head),len(deprel),len(post),len(mask),length,juy)
                 assert len(tok) == length \
                        and len(pos) == length \
                        and len(head) == length \
@@ -89,7 +90,7 @@ class DataLoader(object):
                        and len(mask) == length
 
                 processed += [(tok, asp, pos, head, deprel, post, mask, length, label)]
-
+                juy+=1
         return processed
 
     def gold(self):
@@ -107,10 +108,11 @@ class DataLoader(object):
         batch = self.data[key]
         batch_size = len(batch)
         batch = list(zip(*batch))
-        
+        """
         # sort all fields by lens for easy RNN operations
         lens = [len(x) for x in batch[0]]
         batch, orig_idx = sort_all(batch, lens)
+        """
 
         # convert to tensors
         # token 
