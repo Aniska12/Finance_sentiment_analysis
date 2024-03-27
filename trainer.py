@@ -60,7 +60,7 @@ class GCNTrainer(object):
         # backward
         loss.backward()
         self.optimizer.step()
-        return loss.data, acc,logits
+        return loss, acc,logits
 
     def predict(self, batch):
         # convert to cuda
@@ -73,6 +73,7 @@ class GCNTrainer(object):
         # forward
         self.model.eval()
         logits, gcn_outputs = self.model(inputs)
+        print(gcn_outputs)
         loss = F.cross_entropy(logits, label, reduction='mean')
         corrects = (torch.max(logits, 1)[1].view(label.size()).data == label.data).sum()
         acc = 100.0 * float(corrects) / label.size()[0]
